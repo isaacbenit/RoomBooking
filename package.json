@@ -1,0 +1,19 @@
+{
+  "name": "room-booking-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "start": "concurrently -n server,client -c blue,green \"npm start --workspace server\" \"npm start --workspace client\"",
+    "install:all": "npm install --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "postgres": "^3.4.9"
+  }
+}

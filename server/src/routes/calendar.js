@@ -15,6 +15,7 @@ calendarRouter.get("/room/:roomId/week", async (req, res) => {
   const startDate = start;
   const endDate = addDays(startDate, 6);
 
+  // comment
   try {
     const bookings = await getApprovedBookingsForRoomWeek({
       roomId,

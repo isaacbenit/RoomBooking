@@ -1,37 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
+import { KeyRound, Lock, UserCircle } from "lucide-react";
 import api from "../api/client.js";
 import { useAuth } from "../state/auth.jsx";
-import { Badge, Button, Card, Input, SectionTitle } from "../ui/components.jsx";
+import { Alert, Badge, Button, Card, Input, SectionTitle } from "../ui/components.jsx";
 
 function initials(name) {
   if (!name) return "?";
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0].toUpperCase())
-    .slice(0, 2)
-    .join("");
+  return name.trim().split(/\s+/).map((w) => w[0].toUpperCase()).slice(0, 2).join("");
 }
 
-function SuccessMsg({ msg }) {
-  if (!msg) return null;
-  return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-      {msg}
-    </div>
-  );
-}
-
-function ErrorMsg({ msg }) {
-  if (!msg) return null;
-  return (
-    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-      {msg}
-    </div>
-  );
-}
-
-// Auto-clear a success message after 3 seconds
 function useAutoSuccess() {
   const [msg, setMsg] = useState("");
   const timer = useRef(null);
@@ -47,13 +24,11 @@ function useAutoSuccess() {
 export default function Profile() {
   const { user, updateUser } = useAuth();
 
-  // ── Personal info ──
   const [fullName, setFullName] = useState(user?.full_name ?? "");
   const [nameError, setNameError] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSuccess, showNameSuccess] = useAutoSuccess();
 
-  // ── Password ──
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -64,10 +39,7 @@ export default function Profile() {
   async function saveName(e) {
     e.preventDefault();
     setNameError("");
-    if (fullName.trim().length < 2) {
-      setNameError("Full name must be at least 2 characters.");
-      return;
-    }
+    if (fullName.trim().length < 2) { setNameError("Full name must be at least 2 characters."); return; }
     setNameSaving(true);
     try {
       const { data } = await api.patch("/api/users/me/name", { fullName });
@@ -90,9 +62,7 @@ export default function Profile() {
     setPwSaving(true);
     try {
       await api.patch("/api/users/me/password", { currentPassword: currentPw, newPassword: newPw });
-      setCurrentPw("");
-      setNewPw("");
-      setConfirmPw("");
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
       showPwSuccess("Your password has been updated successfully.");
     } catch (err) {
       setPwError(err?.response?.data?.error || "Failed to update password.");
@@ -110,106 +80,75 @@ export default function Profile() {
       <SectionTitle title="My Profile" subtitle="Manage your personal information and password." />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* ── Personal Information ── */}
-        <Card className="p-6">
-          <div className="text-sm font-bold text-slate-900 mb-5">Personal Information</div>
+        {/* Personal info */}
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <UserCircle size={16} style={{ color: "#2D6A4F" }} />
+            <span className="text-sm font-semibold text-gray-800">Personal Information</span>
+          </div>
 
-          {/* Avatar */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-xl font-extrabold select-none">
+          <div className="flex items-center gap-3 mb-5">
+            <div
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white text-lg font-semibold select-none"
+              style={{ background: "#2D6A4F" }}
+            >
               {initials(user?.full_name)}
             </div>
             <div>
-              <div className="text-base font-bold text-slate-900">{user?.full_name}</div>
-              <div className="text-sm text-slate-500">{user?.email}</div>
+              <div className="text-sm font-semibold text-gray-900">{user?.full_name}</div>
+              <div className="text-xs text-gray-500">{user?.email}</div>
             </div>
           </div>
 
-          <form className="grid gap-4" onSubmit={saveName}>
-            {/* Full name — editable */}
-            <Input
-              label="Full name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              autoComplete="name"
-              required
-            />
+          <form className="grid gap-3" onSubmit={saveName}>
+            <Input label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" required />
 
-            {/* Email — read only */}
             <div>
-              <div className="mb-1 text-sm font-medium text-slate-700">Email</div>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                <svg className="w-4 h-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
+              <div className="mb-1 text-xs font-medium text-gray-600" style={{ letterSpacing: "0.02em" }}>Email</div>
+              <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                <Lock size={13} className="text-gray-400 shrink-0" />
                 {user?.email}
               </div>
-              <div className="mt-1 text-xs text-slate-400">
-                Email cannot be changed. Contact your administrator if needed.
-              </div>
+              <div className="mt-1 text-xs text-gray-400">Email cannot be changed. Contact your administrator if needed.</div>
             </div>
 
-            {/* Role */}
             <div>
-              <div className="mb-1 text-sm font-medium text-slate-700">Role</div>
-              <div className="flex items-center gap-2">
-                <Badge tone={user?.role === "Admin" ? "amber" : "blue"}>{user?.role}</Badge>
-              </div>
+              <div className="mb-1 text-xs font-medium text-gray-600">Role</div>
+              <Badge tone={user?.role === "Admin" ? "amber" : "slate"}>{user?.role}</Badge>
             </div>
 
-            {/* Member since */}
             {memberSince ? (
               <div>
-                <div className="mb-1 text-sm font-medium text-slate-700">Member since</div>
-                <div className="text-sm text-slate-600">{memberSince}</div>
+                <div className="mb-1 text-xs font-medium text-gray-600">Member since</div>
+                <div className="text-sm text-gray-600">{memberSince}</div>
               </div>
             ) : null}
 
-            <ErrorMsg msg={nameError} />
-            <SuccessMsg msg={nameSuccess} />
+            {nameError ? <Alert variant="error">{nameError}</Alert> : null}
+            {nameSuccess ? <Alert variant="success">{nameSuccess}</Alert> : null}
 
-            <Button type="submit" disabled={nameSaving}>
+            <Button type="submit" disabled={nameSaving} className="w-full">
               {nameSaving ? "Saving..." : "Update Name"}
             </Button>
           </form>
         </Card>
 
-        {/* ── Change Password ── */}
-        <Card className="p-6">
-          <div className="text-sm font-bold text-slate-900 mb-5">Change Password</div>
+        {/* Change password */}
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <KeyRound size={16} style={{ color: "#2D6A4F" }} />
+            <span className="text-sm font-semibold text-gray-800">Change Password</span>
+          </div>
 
-          <form className="grid gap-4" onSubmit={savePassword}>
-            <Input
-              label="Current password"
-              type="password"
-              value={currentPw}
-              onChange={(e) => setCurrentPw(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-            <Input
-              label="New password"
-              type="password"
-              value={newPw}
-              onChange={(e) => setNewPw(e.target.value)}
-              autoComplete="new-password"
-              required
-              minLength={6}
-            />
-            <Input
-              label="Confirm new password"
-              type="password"
-              value={confirmPw}
-              onChange={(e) => setConfirmPw(e.target.value)}
-              autoComplete="new-password"
-              required
-            />
+          <form className="grid gap-3" onSubmit={savePassword}>
+            <Input label="Current password" type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" required />
+            <Input label="New password" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" required minLength={6} />
+            <Input label="Confirm new password" type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" required />
 
-            <ErrorMsg msg={pwError} />
-            <SuccessMsg msg={pwSuccess} />
+            {pwError ? <Alert variant="error">{pwError}</Alert> : null}
+            {pwSuccess ? <Alert variant="success">{pwSuccess}</Alert> : null}
 
-            <Button type="submit" disabled={pwSaving}>
+            <Button type="submit" disabled={pwSaving} className="w-full">
               {pwSaving ? "Saving..." : "Update Password"}
             </Button>
           </form>

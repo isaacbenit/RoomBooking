@@ -1,9 +1,8 @@
 import express from "express";
 import bcrypt from "bcrypt";
-import { rateLimit } from "express-rate-limit";
 import { pool } from "../db.js";
 import { badRequest } from "../utils.js";
-
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 export const usersRouter = express.Router();
 
 const passwordChangeLimiter = rateLimit({
@@ -11,7 +10,9 @@ const passwordChangeLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => String(req.user?.id ?? req.ip),
+
+
+keyGenerator: (req, res) => ipKeyGenerator(req)
   message: { error: "Too many password change attempts. Please try again in 15 minutes." },
 });
 

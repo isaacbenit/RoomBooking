@@ -28,7 +28,7 @@ export function formatShort(date) {
 }
 
 export function formatWeekRange(startDate) {
-  const end = addDays(startDate, 6);
+  const end = addDays(startDate, 4);
   const fmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
   return `${fmt.format(startDate)} – ${fmt.format(end)}`;
 }

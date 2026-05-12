@@ -11,6 +11,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const domainOk = !email || email.toLowerCase().endsWith("@testsolutions.de");
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -47,6 +48,11 @@ export default function Login() {
             autoComplete="email"
             required
           />
+          {!domainOk ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Use your organization email.
+            </div>
+          ) : null}
           <Input
             label="Password"
             type="password"
@@ -62,15 +68,15 @@ export default function Login() {
             </div>
           ) : null}
 
-          <Button disabled={loading} type="submit">
+          <Button disabled={loading || !domainOk} type="submit">
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
 
         <div className="mt-4 text-sm text-slate-600">
-          No account?{" "}
+          Need access?{" "}
           <Link className="font-semibold text-blue-700 hover:underline" to="/register">
-            Register
+            Request Access
           </Link>
         </div>
       </Card>

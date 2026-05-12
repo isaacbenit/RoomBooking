@@ -4,7 +4,7 @@ import Navbar from "./layout/Navbar.jsx";
 import Protected from "./routes/Protected.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
-import Register from "./pages/Register.jsx";
+import RequestAccess from "./pages/RequestAccess.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import RoomCalendar from "./pages/RoomCalendar.jsx";
 import MyRequests from "./pages/MyRequests.jsx";
@@ -15,9 +15,10 @@ export default function App() {
     <div className="min-h-dvh bg-slate-50">
       <Navbar />
       <Routes>
-        <Route path="/" element={<Home />} />
+        {/* Always start at Request Access; admins can use /login */}
+        <Route path="/" element={<Navigate to="/register" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/register" element={<RequestAccess />} />
 
         <Route element={<Protected />}>
           <Route path="/rooms" element={<Rooms />} />
@@ -29,7 +30,7 @@ export default function App() {
           </Route>
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/register" replace />} />
       </Routes>
     </div>
   );

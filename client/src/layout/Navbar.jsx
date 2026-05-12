@@ -57,7 +57,7 @@ export default function Navbar() {
           ) : (
             <>
               <NavItem to="/login">Login</NavItem>
-              <NavItem to="/register">Register</NavItem>
+              <NavItem to="/register">Request Access</NavItem>
             </>
           )}
         </div>
@@ -127,7 +127,7 @@ export default function Navbar() {
                   Login
                 </NavItem>
                 <NavItem to="/register" onClick={() => setOpen(false)}>
-                  Register
+                  Request Access
                 </NavItem>
               </>
             )}

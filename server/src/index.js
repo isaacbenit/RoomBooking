@@ -1,12 +1,13 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { requireAuth } from "./auth.js";
+import { requireAdmin, requireAuth } from "./auth.js";
 import { authRouter } from "./routes/auth.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { bookingsRouter } from "./routes/bookings.js";
 import { calendarRouter } from "./routes/calendar.js";
 import { deleteOldBookings } from "./cleanup.js";
+import { adminRouter } from "./routes/admin.js";
 
 const app = express();
 
@@ -27,6 +28,8 @@ app.use("/api/rooms", requireAuth, roomsRouter);
 app.use("/api/bookings", requireAuth, bookingsRouter);
 
 app.use("/api/calendar", requireAuth, calendarRouter);
+
+app.use("/api/admin", requireAuth, requireAdmin, adminRouter);
 
 // Fallback 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));

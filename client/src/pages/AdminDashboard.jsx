@@ -26,18 +26,63 @@ export default function AdminDashboard() {
   const [editRoomDesc, setEditRoomDesc] = useState("");
   const [editRoomError, setEditRoomError] = useState("");
 
+  const [regStatus, setRegStatus] = useState("pending");
+  const [regRequests, setRegRequests] = useState([]);
+  const [regTempPassword, setRegTempPassword] = useState(null);
+
+  const [users, setUsers] = useState([]);
+  const [adminCap, setAdminCap] = useState(5);
+  const [firstAdminEmail, setFirstAdminEmail] = useState("isaac.benit@testsolutions.de");
+  const [userQuery, setUserQuery] = useState("");
+  const [usersVisible, setUsersVisible] = useState(5);
+  const [open, setOpen] = useState({
+    bookingsPending: true,
+    rooms: false,
+    regRequests: false,
+    manageUsers: false,
+    allBookings: false,
+  });
+
+  function ToggleHeader({ title, subtitle, sectionKey }) {
+    const isOpen = Boolean(open[sectionKey]);
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => ({ ...prev, [sectionKey]: !isOpen }))}
+        className="w-full text-left"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-bold text-slate-900">{title}</div>
+            {subtitle ? <div className="mt-1 text-sm text-slate-600">{subtitle}</div> : null}
+          </div>
+          <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+            {isOpen ? "Hide" : "Show"}
+          </div>
+        </div>
+      </button>
+    );
+  }
+
   async function refresh() {
     setLoading(true);
     setError("");
     try {
-      const [rRooms, rBookings] = await Promise.all([
+      const [rRooms, rBookings, rReqs, rUsers] = await Promise.all([
         api.get("/api/rooms"),
         api.get("/api/bookings", { params: { limit: 5, offset: 0 } }),
+        api.get("/api/admin/registration-requests", { params: { status: regStatus } }),
+        api.get("/api/admin/users"),
       ]);
       setRooms(rRooms.data.rooms || []);
       setBookings(rBookings.data.bookings || []);
       setBookingsHasMore(Boolean(rBookings.data.hasMore));
       setBookingsOffset(0);
+      setRegRequests(rReqs.data.requests || []);
+      setUsers(rUsers.data.users || []);
+      setUsersVisible(5);
+      setAdminCap(rUsers.data.adminCap || 5);
+      setFirstAdminEmail(rUsers.data.firstAdminEmail || "isaac.benit@testsolutions.de");
     } catch (e) {
       setError(e?.response?.data?.error || "Failed to load admin data");
     } finally {
@@ -47,7 +92,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regStatus]);
   async function loadMoreBookings() {
     const nextOffset = bookingsOffset + 5;
     setBusyId("bookings-more");
@@ -59,6 +105,88 @@ export default function AdminDashboard() {
       setBookingsHasMore(Boolean(r.data.hasMore));
     } catch (e) {
       setError(e?.response?.data?.error || "Failed to load more bookings");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function refreshRegistrationRequests(status = regStatus) {
+    setBusyId("reg-refresh");
+    setError("");
+    try {
+      const r = await api.get("/api/admin/registration-requests", { params: { status } });
+      setRegRequests(r.data.requests || []);
+    } catch (e) {
+      setError(e?.response?.data?.error || "Failed to load registration requests");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function approveRequest(id) {
+    setBusyId(`reg-approve:${id}`);
+    setError("");
+    setRegTempPassword(null);
+    try {
+      const r = await api.patch(`/api/admin/registration-requests/${id}/approve`);
+      setRegTempPassword(r.data.temporaryPassword || null);
+      await refreshRegistrationRequests("pending");
+      setRegStatus("pending");
+      const u = await api.get("/api/admin/users");
+      setUsers(u.data.users || []);
+      setUsersVisible(5);
+      setAdminCap(u.data.adminCap || 5);
+      setFirstAdminEmail(u.data.firstAdminEmail || firstAdminEmail);
+    } catch (e) {
+      setError(e?.response?.data?.error || "Failed to approve request");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function rejectRequest(id) {
+    setBusyId(`reg-reject:${id}`);
+    setError("");
+    try {
+      await api.patch(`/api/admin/registration-requests/${id}/reject`);
+      await refreshRegistrationRequests(regStatus);
+    } catch (e) {
+      setError(e?.response?.data?.error || "Failed to reject request");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const adminCountLive = useMemo(
+    () => users.filter((u) => u.role === "Admin").length,
+    [users]
+  );
+
+  const filteredUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) => {
+      const name = String(u.full_name || "").toLowerCase();
+      const email = String(u.email || "").toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }, [userQuery, users]);
+
+  useEffect(() => {
+    setUsersVisible(5);
+  }, [userQuery]);
+
+  async function setUserRole(userId, role) {
+    setBusyId(`user-role:${userId}`);
+    setError("");
+    try {
+      await api.patch(`/api/admin/users/${userId}/role`, { role });
+      const u = await api.get("/api/admin/users");
+      setUsers(u.data.users || []);
+      setAdminCap(u.data.adminCap || 5);
+      setFirstAdminEmail(u.data.firstAdminEmail || firstAdminEmail);
+    } catch (e) {
+      setError(e?.response?.data?.error || "Failed to update role");
     } finally {
       setBusyId(null);
     }
@@ -179,7 +307,12 @@ export default function AdminDashboard() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card className="p-5">
-          <div className="text-sm font-bold text-slate-900">Pending requests</div>
+          <ToggleHeader
+            title="Pending booking requests"
+            subtitle="Approve or reject booking requests."
+            sectionKey="bookingsPending"
+          />
+          {open.bookingsPending ? (
           <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-3">
             {pending.length ? (
               pending.map((b) => (
@@ -231,10 +364,17 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
+          ) : null}
         </Card>
 
         <Card className="p-5">
-          <div className="text-sm font-bold text-slate-900">Rooms</div>
+          <ToggleHeader
+            title="Rooms"
+            subtitle="Create, edit, or delete rooms."
+            sectionKey="rooms"
+          />
+          {open.rooms ? (
+          <>
           <form className="mt-4 grid gap-3" onSubmit={createRoom}>
             <Input
               label="Room name"
@@ -316,19 +456,202 @@ export default function AdminDashboard() {
               </div>
             ))}
           </div>
+          </>
+          ) : null}
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Card className="p-5">
+          <ToggleHeader
+            title="Registration Requests"
+            subtitle="Approve requests to create Employee accounts and share a temporary password."
+            sectionKey="regRequests"
+          />
+          {open.regRequests ? (
+          <>
+          <div className="mt-4 flex items-center gap-2">
+            <Button
+              type="button"
+              variant={regStatus === "pending" ? "primary" : "outline"}
+              onClick={() => setRegStatus("pending")}
+            >
+              Pending
+            </Button>
+            <Button
+              type="button"
+              variant={regStatus === "rejected" ? "primary" : "outline"}
+              onClick={() => setRegStatus("rejected")}
+            >
+              Rejected
+            </Button>
+          </div>
+
+          {regTempPassword ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="text-sm font-extrabold text-emerald-900">Temporary password</div>
+              <div className="mt-2 rounded-xl bg-white px-3 py-2 font-mono text-sm text-emerald-900 border border-emerald-200">
+                {regTempPassword}
+              </div>
+              <div className="mt-2 text-xs text-emerald-800">
+                Share this password with the employee. They can log in immediately.
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-3">
+            {regRequests.length ? (
+              regRequests.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-sm font-extrabold text-slate-900">
+                        {r.full_name}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600 break-words">{r.email}</div>
+                      {r.reason ? (
+                        <div className="mt-1 text-xs text-slate-500 break-words">{r.reason}</div>
+                      ) : null}
+                      <div className="mt-1 text-xs text-slate-500">
+                        Submitted: {new Date(r.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    {regStatus === "pending" ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          disabled={busyId === `reg-approve:${r.id}`}
+                          onClick={() => approveRequest(r.id)}
+                        >
+                          {busyId === `reg-approve:${r.id}` ? "..." : "Approve"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={busyId === `reg-reject:${r.id}`}
+                          onClick={() => rejectRequest(r.id)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    ) : (
+                      <Badge tone="red">rejected</Badge>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+                No {regStatus} requests.
+              </div>
+            )}
+          </div>
+          </>
+          ) : null}
+        </Card>
+
+        <Card className="p-5">
+          <ToggleHeader
+            title="Manage Users"
+            subtitle={`Promote or demote users. Admin limit is ${adminCap} (currently ${adminCountLive}/${adminCap}).`}
+            sectionKey="manageUsers"
+          />
+          {open.manageUsers ? (
+          <>
+
+          {adminCountLive >= adminCap ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Admin limit reached (5/5). Demote an existing admin first before promoting a new one.
+            </div>
+          ) : null}
+
+          <div className="mt-4">
+            <Input
+              label="Search users"
+              value={userQuery}
+              onChange={(e) => setUserQuery(e.target.value)}
+              placeholder="Search by name or email..."
+            />
+          </div>
+
+          <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-2">
+            {filteredUsers.slice(0, usersVisible).map((u) => (
+              <div
+                key={u.id}
+                className="rounded-2xl border border-slate-200 bg-white p-4"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-extrabold text-slate-900">
+                      {u.full_name}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600 break-words">{u.email}</div>
+                    <div className="mt-2">
+                      <Badge tone={u.role === "Admin" ? "amber" : "blue"}>{u.role}</Badge>
+                      {String(u.email).toLowerCase() === firstAdminEmail ? (
+                        <span className="ml-2 text-xs text-slate-500">(seeded)</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {u.role === "Employee" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busyId === `user-role:${u.id}` || adminCountLive >= adminCap}
+                        onClick={() => setUserRole(u.id, "Admin")}
+                      >
+                        Promote to Admin
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busyId === `user-role:${u.id}`}
+                        onClick={() => setUserRole(u.id, "Employee")}
+                      >
+                        Demote to Employee
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {filteredUsers.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+                No users match your search.
+              </div>
+            ) : null}
+
+            {filteredUsers.length > usersVisible ? (
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setUsersVisible((v) => v + 5)}
+                >
+                  See more
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          </>
+          ) : null}
         </Card>
       </div>
 
       <Card className="mt-6 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-bold text-slate-900">All bookings</div>
-            <div className="mt-1 text-sm text-slate-600">
-              Across all rooms and users.
-            </div>
-          </div>
-          {loading ? <div className="text-xs text-slate-500">Loading...</div> : null}
-        </div>
+        <ToggleHeader
+          title="All bookings"
+          subtitle="Across all rooms and users."
+          sectionKey="allBookings"
+        />
+        {open.allBookings ? (
 
         <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-2">
           {bookings.length ? (
@@ -374,6 +697,7 @@ export default function AdminDashboard() {
             </div>
           ) : null}
         </div>
+        ) : null}
       </Card>
     </div>
   );

@@ -1,4 +1,4 @@
-# RoomBooking (Full‑Stack Meeting Room Booking)
+# Booking Solutions (Full‑Stack Meeting Room Booking)
 
 Two-folder monorepo:
 - `client/`: React + React Router + Axios + Tailwind CSS

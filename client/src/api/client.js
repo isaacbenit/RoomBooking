@@ -10,5 +10,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export default api;
+// Will be set by AuthProvider after mount
+let _expireSession = null;
+export function setExpireSessionHandler(fn) {
+  _expireSession = fn;
+}
 
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err?.response?.status === 401 && _expireSession) {
+      // Only expire if we actually had a token (not a fresh login failure)
+      const hadToken = Boolean(localStorage.getItem("rb_token"));
+      if (hadToken) _expireSession();
+    }
+    return Promise.reject(err);
+  }
+);
+
+export default api;

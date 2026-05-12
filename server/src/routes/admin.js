@@ -1,6 +1,4 @@
 import express from "express";
-import bcrypt from "bcrypt";
-import crypto from "crypto";
 import { pool } from "../db.js";
 import { badRequest, isValidEmail } from "../utils.js";
 
@@ -10,9 +8,7 @@ const DOMAIN = "@testsolutions.de";
 const FIRST_ADMIN_EMAIL = "isaac.benit@testsolutions.de";
 
 function isCompanyEmail(email) {
-  return (
-    isValidEmail(email) && String(email).toLowerCase().endsWith(DOMAIN)
-  );
+  return isValidEmail(email) && String(email).toLowerCase().endsWith(DOMAIN);
 }
 
 async function adminCount() {
@@ -22,12 +18,7 @@ async function adminCount() {
   return rows[0]?.count ?? 0;
 }
 
-function makeTempPassword() {
-  // readable, WhatsApp-friendly
-  return crypto.randomBytes(9).toString("base64url"); // ~12 chars
-}
-
-// Registration requests
+// Registration requests — never select password_hash
 adminRouter.get("/registration-requests", async (req, res) => {
   const status = String(req.query.status || "pending");
   if (!["pending", "rejected", "approved"].includes(status)) {
@@ -53,8 +44,9 @@ adminRouter.patch("/registration-requests/:id/approve", async (req, res) => {
   if (!Number.isFinite(id)) return badRequest(res, "Invalid request id");
 
   try {
+    // Select password_hash here (server-side only — never sent to client)
     const { rows } = await pool.query(
-      "select * from registration_requests where id = $1",
+      "select id, full_name, email, status, password_hash from registration_requests where id = $1",
       [id]
     );
     const rr = rows[0];
@@ -64,7 +56,13 @@ adminRouter.patch("/registration-requests/:id/approve", async (req, res) => {
 
     const email = String(rr.email).toLowerCase();
     if (!isCompanyEmail(email)) {
-      return res.status(400).json({ error: "Use your organization email." });
+      return res.status(400).json({ error: "Please use your company email to continue." });
+    }
+
+    if (!rr.password_hash) {
+      return res.status(400).json({
+        error: "This request has no password on file. Ask the user to re-submit their request.",
+      });
     }
 
     // Ensure user doesn't already exist
@@ -74,17 +72,15 @@ adminRouter.patch("/registration-requests/:id/approve", async (req, res) => {
         "update registration_requests set status = 'approved' where id = $1",
         [id]
       );
-      return res.json({ ok: true, temporaryPassword: null, note: "User already existed." });
+      return res.json({ ok: true, note: "User already existed." });
     }
 
-    const tempPassword = makeTempPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
-
+    // Use the password_hash the user set during registration — no temp password
     await pool.query("begin");
     await pool.query(
       `insert into users (full_name, email, password_hash, role)
        values ($1, $2, $3, 'Employee')`,
-      [rr.full_name, email, passwordHash]
+      [rr.full_name, email, rr.password_hash]
     );
     await pool.query(
       "update registration_requests set status = 'approved' where id = $1",
@@ -92,13 +88,11 @@ adminRouter.patch("/registration-requests/:id/approve", async (req, res) => {
     );
     await pool.query("commit");
 
-    return res.json({ ok: true, temporaryPassword: tempPassword });
+    return res.json({ ok: true });
   } catch (e) {
-    try {
-      await pool.query("rollback");
-    } catch {}
+    try { await pool.query("rollback"); } catch {}
     if (e?.code === "23505") {
-      return res.status(409).json({ error: "User or request already exists" });
+      return res.status(409).json({ error: "User already exists" });
     }
     return res.status(500).json({ error: "Failed to approve request" });
   }
@@ -113,9 +107,7 @@ adminRouter.patch("/registration-requests/:id/reject", async (req, res) => {
       [id]
     );
     if (!rowCount) {
-      return res
-        .status(400)
-        .json({ error: "Only pending requests can be rejected" });
+      return res.status(400).json({ error: "Only pending requests can be rejected" });
     }
     return res.json({ ok: true });
   } catch {
@@ -123,7 +115,7 @@ adminRouter.patch("/registration-requests/:id/reject", async (req, res) => {
   }
 });
 
-// Manage users
+// Manage users — never select password_hash
 adminRouter.get("/users", async (_req, res) => {
   try {
     const { rows } = await pool.query(
@@ -153,8 +145,7 @@ adminRouter.patch("/users/:id/role", async (req, res) => {
       const count = await adminCount();
       if (count >= 5) {
         return res.status(409).json({
-          error:
-            "Admin limit reached (5/5). Demote an existing admin first before promoting a new one.",
+          error: "Admin limit reached (5/5). Demote an existing admin first before promoting a new one.",
           code: "ADMIN_LIMIT",
         });
       }
@@ -170,3 +161,33 @@ adminRouter.patch("/users/:id/role", async (req, res) => {
   }
 });
 
+// Delete user — admin cannot delete themselves or the seeded first admin
+adminRouter.delete("/users/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return badRequest(res, "Invalid user id");
+
+  // Prevent self-deletion
+  if (Number(req.user.id) === id) {
+    return res.status(400).json({ error: "You cannot delete your own account." });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      "select id, email from users where id = $1",
+      [id]
+    );
+    const target = rows[0];
+    if (!target) return res.status(404).json({ error: "User not found" });
+
+    // Protect the seeded first admin
+    if (String(target.email).toLowerCase() === FIRST_ADMIN_EMAIL) {
+      return res.status(403).json({ error: "The primary admin account cannot be deleted." });
+    }
+
+    // Bookings are removed via ON DELETE CASCADE on the FK
+    await pool.query("delete from users where id = $1", [id]);
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: "Failed to delete user" });
+  }
+});

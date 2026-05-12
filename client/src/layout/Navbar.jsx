@@ -25,6 +25,8 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
+  const logoHref = "/";
+
   return (
     <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
@@ -36,12 +38,12 @@ export default function Navbar() {
           >
             <span className="text-lg leading-none">☰</span>
           </button>
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white font-extrabold">
-              RB
+          <Link to={logoHref} className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white font-extrabold text-xs">
+              BS
             </div>
             <div>
-              <div className="text-sm font-extrabold text-slate-900">RoomBooking</div>
+              <div className="text-sm font-extrabold text-slate-900">Booking Solutions</div>
               <div className="text-xs text-slate-500">Meetings, without the chaos</div>
             </div>
           </Link>
@@ -65,17 +67,19 @@ export default function Navbar() {
         <div className="hidden items-center gap-2 sm:flex">
           {isAuthed ? (
             <>
-              <div className="text-right">
-                <div className="text-sm font-bold text-slate-900">{user?.full_name}</div>
-                <div className="text-xs text-slate-600">
-                  <Badge tone={user?.role === "Admin" ? "amber" : "blue"}>{user?.role}</Badge>
+              <NavItem to="/profile">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-extrabold">
+                    {user?.full_name?.trim().split(/\s+/).map((w) => w[0].toUpperCase()).slice(0, 2).join("") ?? "?"}
+                  </div>
+                  <span>{user?.full_name}</span>
                 </div>
-              </div>
+              </NavItem>
               <Button
                 variant="outline"
                 onClick={() => {
                   logout();
-                  navigate("/login");
+                  navigate("/");
                 }}
               >
                 Logout
@@ -102,33 +106,23 @@ export default function Navbar() {
                     onClick={() => {
                       logout();
                       setOpen(false);
-                      navigate("/login");
+                      navigate("/");
                     }}
                   >
                     Logout
                   </Button>
                 </div>
-
-                <NavItem to="/rooms" onClick={() => setOpen(false)}>
-                  Rooms
-                </NavItem>
-                <NavItem to="/my-requests" onClick={() => setOpen(false)}>
-                  My Requests
-                </NavItem>
+                <NavItem to="/rooms" onClick={() => setOpen(false)}>Rooms</NavItem>
+                <NavItem to="/my-requests" onClick={() => setOpen(false)}>My Requests</NavItem>
+                <NavItem to="/profile" onClick={() => setOpen(false)}>My Profile</NavItem>
                 {user?.role === "Admin" ? (
-                  <NavItem to="/admin" onClick={() => setOpen(false)}>
-                    Admin
-                  </NavItem>
+                  <NavItem to="/admin" onClick={() => setOpen(false)}>Admin</NavItem>
                 ) : null}
               </>
             ) : (
               <>
-                <NavItem to="/login" onClick={() => setOpen(false)}>
-                  Login
-                </NavItem>
-                <NavItem to="/register" onClick={() => setOpen(false)}>
-                  Request Access
-                </NavItem>
+                <NavItem to="/login" onClick={() => setOpen(false)}>Login</NavItem>
+                <NavItem to="/register" onClick={() => setOpen(false)}>Request Access</NavItem>
               </>
             )}
           </div>
@@ -137,4 +131,3 @@ export default function Navbar() {
     </div>
   );
 }
-

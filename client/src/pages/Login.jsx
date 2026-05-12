@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, Navigate } from "react-router-dom";
 import api from "../api/client.js";
 import { useAuth } from "../state/auth.jsx";
 import { Button, Card, Input } from "../ui/components.jsx";
@@ -9,9 +9,13 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, isAuthed } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from || "/rooms";
   const domainOk = !email || email.toLowerCase().endsWith("@testsolutions.de");
+
+  if (isAuthed) return <Navigate to="/rooms" replace />;
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -20,7 +24,7 @@ export default function Login() {
     try {
       const { data } = await api.post("/api/auth/login", { email, password });
       login(data);
-      navigate("/rooms");
+      navigate(from, { replace: true });
     } catch (e2) {
       setError(
         e2?.response?.data?.error ||
@@ -50,7 +54,7 @@ export default function Login() {
           />
           {!domainOk ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Use your organization email.
+              Please use your company email to continue.
             </div>
           ) : null}
           <Input
@@ -83,4 +87,3 @@ export default function Login() {
     </div>
   );
 }
-

@@ -23,6 +23,7 @@ calendarRouter.get("/room/:roomId/week", async (req, res) => {
       endDate,
     });
     return res.json({ startDate, endDate, bookings });
+    console.log("bookings", bookings);
   } catch {
     return res.status(500).json({ error: "Failed to fetch calendar bookings" });
   }

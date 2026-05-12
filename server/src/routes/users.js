@@ -12,7 +12,7 @@ const passwordChangeLimiter = rateLimit({
   legacyHeaders: false,
 
 
-keyGenerator: (req, res) => ipKeyGenerator(req)
+keyGenerator: (req, res) => ipKeyGenerator(req),
   message: { error: "Too many password change attempts. Please try again in 15 minutes." },
 });
 

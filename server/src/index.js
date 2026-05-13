@@ -65,8 +65,11 @@ const passwordChangeLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => String(req.user?.id ?? req.ip),
   message: { error: "Too many password change attempts. Please try again in 15 minutes." },
+  validate: { defaultKeys: false }, // Add this line!
 });
 
+
+app.set('trust proxy', 1);
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 // Rate limiters must be registered before the router handles the routes

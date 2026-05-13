@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { badRequest, isValidEmail } from "../utils.js";
+import { sendApprovalEmail } from "../email.js";
 
 export const adminRouter = express.Router();
 
@@ -88,6 +89,9 @@ adminRouter.patch("/registration-requests/:id/approve", async (req, res) => {
     );
     await pool.query("commit");
 
+    // Send approval email (non-blocking)
+    fireApprovalEmail(email, rr.full_name);
+
     return res.json({ ok: true });
   } catch (e) {
     try { await pool.query("rollback"); } catch {}
@@ -97,6 +101,11 @@ adminRouter.patch("/registration-requests/:id/approve", async (req, res) => {
     return res.status(500).json({ error: "Failed to approve request" });
   }
 });
+
+// Fire approval email after successful commit (non-blocking)
+async function fireApprovalEmail(email, fullName) {
+  try { await sendApprovalEmail({ to: email, fullName }); } catch {}
+}
 
 adminRouter.patch("/registration-requests/:id/reject", async (req, res) => {
   const id = Number(req.params.id);

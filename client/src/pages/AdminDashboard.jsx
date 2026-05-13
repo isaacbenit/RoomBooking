@@ -1,9 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Building2, ClipboardList, Settings, Trash2, Pencil, Plus, Users, CheckCircle2, XCircle, Clock } from "lucide-react";
 import api from "../api/client.js";
 import { useAuth } from "../state/auth.jsx";
-import { Badge, Button, Card, Input, SectionTitle } from "../ui/components.jsx";
+import { Alert, Badge, Button, Card, Input, SectionTitle } from "../ui/components.jsx";
 
-function tone(status) {
+function statusTone(status) {
+  if (status === "confirmed") return "green";
+  if (status === "rejected" || status === "cancelled") return "red";
+  return "amber";
+}
+
+function regTone(status) {
   if (status === "approved") return "green";
   if (status === "rejected") return "red";
   return "amber";
@@ -23,7 +30,6 @@ export default function AdminDashboard() {
   const [roomName, setRoomName] = useState("");
   const [roomDesc, setRoomDesc] = useState("");
   const [creating, setCreating] = useState(false);
-
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editRoomName, setEditRoomName] = useState("");
   const [editRoomDesc, setEditRoomDesc] = useState("");
@@ -37,32 +43,31 @@ export default function AdminDashboard() {
   const [firstAdminEmail, setFirstAdminEmail] = useState("isaac.benit@testsolutions.de");
   const [userQuery, setUserQuery] = useState("");
   const [usersVisible, setUsersVisible] = useState(5);
+
   const [open, setOpen] = useState({
-    bookingsPending: true,
-    rooms: false,
-    regRequests: false,
-    manageUsers: false,
-    allBookings: false,
+    bookings: true, rooms: false, regRequests: false, manageUsers: false,
   });
 
-  function ToggleHeader({ title, subtitle, sectionKey }) {
-    const isOpen = Boolean(open[sectionKey]);
+  function toggle(key) { setOpen((p) => ({ ...p, [key]: !p[key] })); }
+
+  function Section({ sectionKey, icon: Icon, title, subtitle, children }) {
+    const isOpen = open[sectionKey];
     return (
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => ({ ...prev, [sectionKey]: !isOpen }))}
-        className="w-full text-left"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-bold text-slate-900">{title}</div>
-            {subtitle ? <div className="mt-1 text-sm text-slate-600">{subtitle}</div> : null}
+      <Card className="p-4">
+        <button type="button" onClick={() => toggle(sectionKey)} className="w-full text-left">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <Icon size={16} style={{ color: "#2D6A4F", marginTop: 2 }} />
+              <div>
+                <div className="text-sm font-semibold text-gray-900">{title}</div>
+                {subtitle ? <div className="text-xs text-gray-500 mt-0.5">{subtitle}</div> : null}
+              </div>
+            </div>
+            <span className="text-xs font-medium text-gray-500 shrink-0">{isOpen ? "Hide" : "Show"}</span>
           </div>
-          <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-            {isOpen ? "Hide" : "Show"}
-          </div>
-        </div>
-      </button>
+        </button>
+        {isOpen ? <div className="mt-4">{children}</div> : null}
+      </Card>
     );
   }
 
@@ -72,7 +77,7 @@ export default function AdminDashboard() {
     try {
       const [rRooms, rBookings, rReqs, rUsers] = await Promise.all([
         api.get("/api/rooms"),
-        api.get("/api/bookings", { params: { limit: 5, offset: 0 } }),
+        api.get("/api/bookings", { params: { limit: 10, offset: 0 } }),
         api.get("/api/admin/registration-requests", { params: { status: regStatus } }),
         api.get("/api/admin/users"),
       ]);
@@ -84,7 +89,7 @@ export default function AdminDashboard() {
       setUsers(rUsers.data.users || []);
       setUsersVisible(5);
       setAdminCap(rUsers.data.adminCap || 5);
-      setFirstAdminEmail(rUsers.data.firstAdminEmail || "isaac.benit@testsolutions.de");
+      setFirstAdminEmail(rUsers.data.firstAdminEmail || firstAdminEmail);
     } catch (e) {
       setError(e?.response?.data?.error || "Failed to load admin data");
     } finally {
@@ -92,35 +97,44 @@ export default function AdminDashboard() {
     }
   }
 
-  useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regStatus]);
+  useEffect(() => { refresh(); }, [regStatus]);
 
   async function loadMoreBookings() {
-    const nextOffset = bookingsOffset + 5;
+    const nextOffset = bookingsOffset + 10;
     setBusyId("bookings-more");
-    setError("");
     try {
-      const r = await api.get("/api/bookings", { params: { limit: 5, offset: nextOffset } });
+      const r = await api.get("/api/bookings", { params: { limit: 10, offset: nextOffset } });
       setBookings((prev) => [...prev, ...(r.data.bookings || [])]);
       setBookingsOffset(nextOffset);
       setBookingsHasMore(Boolean(r.data.hasMore));
     } catch (e) {
-      setError(e?.response?.data?.error || "Failed to load more bookings");
+      setError(e?.response?.data?.error || "Failed to load more");
     } finally {
       setBusyId(null);
     }
   }
 
-  async function refreshRegistrationRequests(status = regStatus) {
-    setBusyId("reg-refresh");
-    setError("");
+  async function cancelBooking(id) {
+    if (!window.confirm("Cancel this booking? This cannot be undone.")) return;
+    setBusyId(`cancel:${id}`);
     try {
-      const r = await api.get("/api/admin/registration-requests", { params: { status } });
-      setRegRequests(r.data.requests || []);
+      await api.patch(`/api/bookings/${id}/cancel`);
+      await refresh();
     } catch (e) {
-      setError(e?.response?.data?.error || "Failed to load registration requests");
+      setError(e?.response?.data?.error || "Failed to cancel booking");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteBooking(id) {
+    if (!window.confirm("Permanently delete this booking?")) return;
+    setBusyId(`del:${id}`);
+    try {
+      await api.delete(`/api/bookings/${id}`);
+      await refresh();
+    } catch (e) {
+      setError(e?.response?.data?.error || "Failed to delete booking");
     } finally {
       setBusyId(null);
     }
@@ -128,16 +142,17 @@ export default function AdminDashboard() {
 
   async function approveRequest(id) {
     setBusyId(`reg-approve:${id}`);
-    setError("");
     try {
       await api.patch(`/api/admin/registration-requests/${id}/approve`);
-      await refreshRegistrationRequests("pending");
+      const [rReqs, rUsers] = await Promise.all([
+        api.get("/api/admin/registration-requests", { params: { status: "pending" } }),
+        api.get("/api/admin/users"),
+      ]);
+      setRegRequests(rReqs.data.requests || []);
       setRegStatus("pending");
-      const u = await api.get("/api/admin/users");
-      setUsers(u.data.users || []);
+      setUsers(rUsers.data.users || []);
       setUsersVisible(5);
-      setAdminCap(u.data.adminCap || 5);
-      setFirstAdminEmail(u.data.firstAdminEmail || firstAdminEmail);
+      setAdminCap(rUsers.data.adminCap || 5);
     } catch (e) {
       setError(e?.response?.data?.error || "Failed to approve request");
     } finally {
@@ -147,10 +162,10 @@ export default function AdminDashboard() {
 
   async function rejectRequest(id) {
     setBusyId(`reg-reject:${id}`);
-    setError("");
     try {
       await api.patch(`/api/admin/registration-requests/${id}/reject`);
-      await refreshRegistrationRequests(regStatus);
+      const r = await api.get("/api/admin/registration-requests", { params: { status: regStatus } });
+      setRegRequests(r.data.requests || []);
     } catch (e) {
       setError(e?.response?.data?.error || "Failed to reject request");
     } finally {
@@ -163,24 +178,21 @@ export default function AdminDashboard() {
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase();
     if (!q) return users;
-    return users.filter((u) => {
-      const name = String(u.full_name || "").toLowerCase();
-      const email = String(u.email || "").toLowerCase();
-      return name.includes(q) || email.includes(q);
-    });
+    return users.filter((u) =>
+      String(u.full_name || "").toLowerCase().includes(q) ||
+      String(u.email || "").toLowerCase().includes(q)
+    );
   }, [userQuery, users]);
 
   useEffect(() => { setUsersVisible(5); }, [userQuery]);
 
   async function setUserRole(userId, role) {
-    setBusyId(`user-role:${userId}`);
-    setError("");
+    setBusyId(`role:${userId}`);
     try {
       await api.patch(`/api/admin/users/${userId}/role`, { role });
       const u = await api.get("/api/admin/users");
       setUsers(u.data.users || []);
       setAdminCap(u.data.adminCap || 5);
-      setFirstAdminEmail(u.data.firstAdminEmail || firstAdminEmail);
     } catch (e) {
       setError(e?.response?.data?.error || "Failed to update role");
     } finally {
@@ -189,12 +201,8 @@ export default function AdminDashboard() {
   }
 
   async function deleteUser(u) {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${u.full_name}? This cannot be undone.`
-    );
-    if (!confirmed) return;
-    setBusyId(`user-delete:${u.id}`);
-    setError("");
+    if (!window.confirm(`Delete ${u.full_name}? This cannot be undone.`)) return;
+    setBusyId(`user-del:${u.id}`);
     try {
       await api.delete(`/api/admin/users/${u.id}`);
       const res = await api.get("/api/admin/users");
@@ -207,42 +215,12 @@ export default function AdminDashboard() {
     }
   }
 
-  const pending = useMemo(() => bookings.filter((b) => b.status === "pending"), [bookings]);
-
-  async function approve(id) {
-    setBusyId(id);
-    setError("");
-    try {
-      await api.patch(`/api/bookings/${id}/approve`);
-      await refresh();
-    } catch (e) {
-      setError(e?.response?.data?.error || "Failed to approve");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function reject(id) {
-    setBusyId(id);
-    setError("");
-    try {
-      await api.patch(`/api/bookings/${id}/reject`);
-      await refresh();
-    } catch (e) {
-      setError(e?.response?.data?.error || "Failed to reject");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function createRoom(e) {
     e.preventDefault();
     setCreating(true);
-    setError("");
     try {
       await api.post("/api/rooms", { name: roomName, description: roomDesc });
-      setRoomName("");
-      setRoomDesc("");
+      setRoomName(""); setRoomDesc("");
       await refresh();
     } catch (e2) {
       setError(e2?.response?.data?.error || "Failed to create room");
@@ -252,10 +230,8 @@ export default function AdminDashboard() {
   }
 
   async function deleteRoom(id) {
-    const ok = window.confirm("Delete this room? This will also delete all linked bookings.");
-    if (!ok) return;
+    if (!window.confirm("Delete this room? All linked bookings will also be deleted.")) return;
     setBusyId(`room:${id}`);
-    setError("");
     try {
       await api.delete(`/api/rooms/${id}`);
       await refresh();
@@ -266,23 +242,11 @@ export default function AdminDashboard() {
     }
   }
 
-  function startEdit(room) {
-    setEditingRoomId(room.id);
-    setEditRoomName(room.name || "");
-    setEditRoomDesc(room.description || "");
-    setEditRoomError("");
-  }
-
-  function cancelEdit() {
-    setEditingRoomId(null);
-    setEditRoomName("");
-    setEditRoomDesc("");
-    setEditRoomError("");
-  }
+  function startEdit(r) { setEditingRoomId(r.id); setEditRoomName(r.name); setEditRoomDesc(r.description); setEditRoomError(""); }
+  function cancelEdit() { setEditingRoomId(null); setEditRoomName(""); setEditRoomDesc(""); setEditRoomError(""); }
 
   async function saveEdit(id) {
     setBusyId(`room-edit:${id}`);
-    setError("");
     setEditRoomError("");
     try {
       await api.patch(`/api/rooms/${id}`, { name: editRoomName, description: editRoomDesc });
@@ -298,312 +262,187 @@ export default function AdminDashboard() {
   }
 
   function canDeleteUser(u) {
-    if (String(u.email).toLowerCase() === firstAdminEmail) return false;
-    if (Number(u.id) === Number(currentUser?.id)) return false;
-    return true;
+    return String(u.email).toLowerCase() !== firstAdminEmail && Number(u.id) !== Number(currentUser?.id);
   }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <SectionTitle
         title="Admin Dashboard"
-        subtitle="Approve requests, manage rooms, and view all bookings."
-        right={
-          <Button variant="subtle" onClick={refresh} disabled={loading}>
-            Refresh
-          </Button>
-        }
+        subtitle="Manage rooms, bookings, and users."
+        right={<Button size="sm" variant="subtle" onClick={refresh} disabled={loading}>Refresh</Button>}
       />
 
-      {error ? (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
+      {error ? <Alert variant="error" className="mt-4">{error}</Alert> : null}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Pending booking requests */}
-        <Card className="p-5">
-          <ToggleHeader
-            title="Pending booking requests"
-            subtitle="Approve or reject booking requests."
-            sectionKey="bookingsPending"
-          />
-          {open.bookingsPending ? (
-            <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-3">
-              {pending.length ? (
-                pending.map((b) => (
-                  <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="text-sm font-extrabold text-slate-900">{b.room_name}</div>
-                        <div className="mt-1 text-sm text-slate-600">
-                          {b.date} · {String(b.start_time).slice(0, 5)} – {String(b.end_time).slice(0, 5)}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Requested by <span className="font-semibold">{b.user_full_name}</span>
-                        </div>
-                        {b.meeting_name ? (
-                          <div className="mt-1 text-xs text-slate-500">{b.meeting_name}</div>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button type="button" disabled={busyId === b.id} onClick={() => approve(b.id)}>
-                          {busyId === b.id ? "..." : "Approve"}
-                        </Button>
-                        <Button type="button" variant="outline" disabled={busyId === b.id} onClick={() => reject(b.id)}>
-                          Reject
-                        </Button>
-                      </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {/* All Bookings */}
+        <Section sectionKey="bookings" icon={ClipboardList} title="All Bookings" subtitle="Cancel or delete any booking.">
+          <div className="grid gap-2 max-h-[480px] overflow-y-auto pr-1">
+            {bookings.length ? bookings.map((b) => (
+              <div key={b.id} className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{b.room_name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {b.date} · {String(b.start_time).slice(0, 5)} – {String(b.end_time).slice(0, 5)}
+                    </div>
+                    <div className="text-xs text-gray-400">{b.user_full_name}{b.meeting_name ? ` · ${b.meeting_name}` : ""}</div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <Badge tone={statusTone(b.status)}>{b.status}</Badge>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" disabled={!!busyId} onClick={() => cancelBooking(b.id)}>
+                        <XCircle size={11} /> Cancel
+                      </Button>
+                      <Button size="sm" variant="danger" disabled={!!busyId} onClick={() => deleteBooking(b.id)}>
+                        <Trash2 size={11} />
+                      </Button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
-                  No pending requests.
                 </div>
-              )}
-            </div>
-          ) : null}
-        </Card>
+              </div>
+            )) : (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-8 text-center text-sm text-gray-400">No bookings yet.</div>
+            )}
+            {bookingsHasMore ? (
+              <Button size="sm" variant="subtle" className="w-full mt-1" disabled={busyId === "bookings-more"} onClick={loadMoreBookings}>
+                {busyId === "bookings-more" ? "Loading..." : "See more"}
+              </Button>
+            ) : null}
+          </div>
+        </Section>
 
         {/* Rooms */}
-        <Card className="p-5">
-          <ToggleHeader title="Rooms" subtitle="Create, edit, or delete rooms." sectionKey="rooms" />
-          {open.rooms ? (
-            <>
-              <form className="mt-4 grid gap-3" onSubmit={createRoom}>
-                <Input label="Room name" value={roomName} onChange={(e) => setRoomName(e.target.value)} required />
-                <Input label="Description" value={roomDesc} onChange={(e) => setRoomDesc(e.target.value)} required />
-                <Button type="submit" disabled={creating}>{creating ? "Creating..." : "Create room"}</Button>
-              </form>
-              <div className="mt-5 h-[420px] overflow-y-auto pr-1 grid gap-2">
-                {rooms.map((r) => (
-                  <div key={r.id} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="min-w-0">
-                      {editingRoomId === r.id ? (
-                        <div className="grid gap-2">
-                          <Input label="Name" value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} />
-                          <Input label="Description" value={editRoomDesc} onChange={(e) => setEditRoomDesc(e.target.value)} />
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" disabled={busyId === `room-edit:${r.id}`} onClick={() => saveEdit(r.id)}>
-                              {busyId === `room-edit:${r.id}` ? "Saving..." : "Save"}
-                            </Button>
-                            <Button type="button" variant="outline" onClick={cancelEdit}>Cancel</Button>
-                          </div>
-                          {editRoomError ? (
-                            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{editRoomError}</div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="truncate text-sm font-extrabold text-slate-900">{r.name}</div>
-                          <div className="mt-1 text-xs text-slate-600 break-words">{r.description}</div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" onClick={() => startEdit(r)}>Edit</Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    {editingRoomId === r.id ? null : (
-                      <Button type="button" variant="danger" className="shrink-0" disabled={busyId === `room:${r.id}`} onClick={() => deleteRoom(r.id)}>
-                        Delete
+        <Section sectionKey="rooms" icon={Building2} title="Rooms" subtitle="Create, edit, or delete rooms.">
+          <form className="grid gap-2 mb-4" onSubmit={createRoom}>
+            <Input label="Room name" value={roomName} onChange={(e) => setRoomName(e.target.value)} required />
+            <Input label="Description" value={roomDesc} onChange={(e) => setRoomDesc(e.target.value)} required />
+            <Button type="submit" size="sm" disabled={creating} className="flex items-center gap-1">
+              <Plus size={13} />{creating ? "Creating..." : "Create room"}
+            </Button>
+          </form>
+          <div className="grid gap-2 max-h-[360px] overflow-y-auto pr-1">
+            {rooms.map((r) => (
+              <div key={r.id} className="rounded-lg border border-gray-200 bg-white p-3">
+                {editingRoomId === r.id ? (
+                  <div className="grid gap-2">
+                    <Input label="Name" value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} />
+                    <Input label="Description" value={editRoomDesc} onChange={(e) => setEditRoomDesc(e.target.value)} />
+                    <div className="flex gap-2">
+                      <Button size="sm" disabled={busyId === `room-edit:${r.id}`} onClick={() => saveEdit(r.id)}>
+                        {busyId === `room-edit:${r.id}` ? "Saving..." : "Save"}
                       </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : null}
-        </Card>
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Registration Requests */}
-        <Card className="p-5">
-          <ToggleHeader
-            title="Registration Requests"
-            subtitle="Approve requests to create Employee accounts."
-            sectionKey="regRequests"
-          />
-          {open.regRequests ? (
-            <>
-              <div className="mt-4 flex items-center gap-2">
-                <Button type="button" variant={regStatus === "pending" ? "primary" : "outline"} onClick={() => setRegStatus("pending")}>
-                  Pending
-                </Button>
-                <Button type="button" variant={regStatus === "rejected" ? "primary" : "outline"} onClick={() => setRegStatus("rejected")}>
-                  Rejected
-                </Button>
-              </div>
-              <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-3">
-                {regRequests.length ? (
-                  regRequests.map((r) => (
-                    <div key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="text-sm font-extrabold text-slate-900">{r.full_name}</div>
-                          <div className="mt-1 text-sm text-slate-600 break-words">{r.email}</div>
-                          {r.reason ? (
-                            <div className="mt-1 text-xs text-slate-500 break-words">{r.reason}</div>
-                          ) : null}
-                          <div className="mt-1 text-xs text-slate-500">
-                            Submitted: {new Date(r.created_at).toLocaleString()}
-                          </div>
-                        </div>
-                        {regStatus === "pending" ? (
-                          <div className="flex items-center gap-2">
-                            <Button type="button" disabled={busyId === `reg-approve:${r.id}`} onClick={() => approveRequest(r.id)}>
-                              {busyId === `reg-approve:${r.id}` ? "..." : "Approve"}
-                            </Button>
-                            <Button type="button" variant="outline" disabled={busyId === `reg-reject:${r.id}`} onClick={() => rejectRequest(r.id)}>
-                              Reject
-                            </Button>
-                          </div>
-                        ) : (
-                          <Badge tone="red">rejected</Badge>
-                        )}
-                      </div>
+                      <Button size="sm" variant="subtle" onClick={cancelEdit}>Cancel</Button>
                     </div>
-                  ))
+                    {editRoomError ? <Alert variant="error">{editRoomError}</Alert> : null}
+                  </div>
                 ) : (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
-                    No {regStatus} requests.
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">{r.name}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 break-words">{r.description}</div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => startEdit(r)}><Pencil size={11} /></Button>
+                      <Button size="sm" variant="danger" disabled={busyId === `room:${r.id}`} onClick={() => deleteRoom(r.id)}>
+                        <Trash2 size={11} />
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
-            </>
-          ) : null}
-        </Card>
+            ))}
+          </div>
+        </Section>
+
+        {/* Registration Requests */}
+        <Section sectionKey="regRequests" icon={Clock} title="Registration Requests" subtitle="Approve or reject access requests.">
+          <div className="flex gap-2 mb-3">
+            <Button size="sm" variant={regStatus === "pending" ? "primary" : "outline"} onClick={() => setRegStatus("pending")}>Pending</Button>
+            <Button size="sm" variant={regStatus === "rejected" ? "primary" : "outline"} onClick={() => setRegStatus("rejected")}>Rejected</Button>
+          </div>
+          <div className="grid gap-2 max-h-[400px] overflow-y-auto pr-1">
+            {regRequests.length ? regRequests.map((r) => (
+              <div key={r.id} className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900">{r.full_name}</div>
+                    <div className="text-xs text-gray-500 break-words">{r.email}</div>
+                    {r.reason ? <div className="text-xs text-gray-400 mt-0.5">{r.reason}</div> : null}
+                    <div className="text-xs text-gray-400 mt-0.5">{new Date(r.created_at).toLocaleDateString()}</div>
+                  </div>
+                  {regStatus === "pending" ? (
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" disabled={busyId === `reg-approve:${r.id}`} onClick={() => approveRequest(r.id)}>
+                        <CheckCircle2 size={11} />{busyId === `reg-approve:${r.id}` ? "..." : "Approve"}
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={busyId === `reg-reject:${r.id}`} onClick={() => rejectRequest(r.id)}>
+                        <XCircle size={11} />
+                      </Button>
+                    </div>
+                  ) : <Badge tone="red">rejected</Badge>}
+                </div>
+              </div>
+            )) : (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">No {regStatus} requests.</div>
+            )}
+          </div>
+        </Section>
 
         {/* Manage Users */}
-        <Card className="p-5">
-          <ToggleHeader
-            title="Manage Users"
-            subtitle={`Promote, demote, or delete users. Admin limit: ${adminCountLive}/${adminCap}.`}
-            sectionKey="manageUsers"
-          />
-          {open.manageUsers ? (
-            <>
-              {adminCountLive >= adminCap ? (
-                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Admin limit reached (5/5). Demote an existing admin first before promoting a new one.
-                </div>
-              ) : null}
-              <div className="mt-4">
-                <Input
-                  label="Search users"
-                  value={userQuery}
-                  onChange={(e) => setUserQuery(e.target.value)}
-                  placeholder="Search by name or email..."
-                />
-              </div>
-              <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-2">
-                {filteredUsers.slice(0, usersVisible).map((u) => (
-                  <div key={u.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-extrabold text-slate-900">{u.full_name}</div>
-                        <div className="mt-1 text-sm text-slate-600 break-words">{u.email}</div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <Badge tone={u.role === "Admin" ? "amber" : "blue"}>{u.role}</Badge>
-                          {String(u.email).toLowerCase() === firstAdminEmail ? (
-                            <span className="text-xs text-slate-500">(seeded)</span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {u.role === "Employee" ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={busyId === `user-role:${u.id}` || adminCountLive >= adminCap}
-                            onClick={() => setUserRole(u.id, "Admin")}
-                          >
-                            Promote
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={busyId === `user-role:${u.id}`}
-                            onClick={() => setUserRole(u.id, "Employee")}
-                          >
-                            Demote
-                          </Button>
-                        )}
-                        {canDeleteUser(u) ? (
-                          <Button
-                            type="button"
-                            variant="danger"
-                            disabled={busyId === `user-delete:${u.id}`}
-                            onClick={() => deleteUser(u)}
-                          >
-                            {busyId === `user-delete:${u.id}` ? "..." : "Delete"}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {filteredUsers.length === 0 ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
-                    No users match your search.
-                  </div>
-                ) : null}
-                {filteredUsers.length > usersVisible ? (
-                  <div className="pt-2">
-                    <Button type="button" variant="outline" className="w-full" onClick={() => setUsersVisible((v) => v + 5)}>
-                      See more
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            </>
+        <Section sectionKey="manageUsers" icon={Users} title="Manage Users" subtitle={`Admin limit: ${adminCountLive}/${adminCap}`}>
+          {adminCountLive >= adminCap ? (
+            <Alert variant="warning" className="mb-3">Admin limit reached (5/5). Demote an existing admin first.</Alert>
           ) : null}
-        </Card>
-      </div>
-
-      {/* All bookings */}
-      <Card className="mt-6 p-5">
-        <ToggleHeader title="All bookings" subtitle="Across all rooms and users." sectionKey="allBookings" />
-        {open.allBookings ? (
-          <div className="mt-4 h-[520px] overflow-y-auto pr-1 grid gap-2">
-            {bookings.length ? (
-              bookings.map((b) => (
-                <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-extrabold text-slate-900">
-                        {b.room_name} · {b.date}
-                      </div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        {String(b.start_time).slice(0, 5)} – {String(b.end_time).slice(0, 5)} ·{" "}
-                        <span className="font-semibold">{b.user_full_name}</span>
-                        {b.meeting_name ? ` · ${b.meeting_name}` : ""}
-                      </div>
-                    </div>
-                    <div className="shrink-0">
-                      <Badge tone={tone(b.status)}>{b.status}</Badge>
+          <Input
+            label="Search"
+            value={userQuery}
+            onChange={(e) => setUserQuery(e.target.value)}
+            placeholder="Name or email..."
+          />
+          <div className="mt-3 grid gap-2 max-h-[400px] overflow-y-auto pr-1">
+            {filteredUsers.slice(0, usersVisible).map((u) => (
+              <div key={u.id} className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{u.full_name}</div>
+                    <div className="text-xs text-gray-500 break-words">{u.email}</div>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <Badge tone={u.role === "Admin" ? "amber" : "slate"}>{u.role}</Badge>
+                      {String(u.email).toLowerCase() === firstAdminEmail ? (
+                        <span className="text-xs text-gray-400">(primary)</span>
+                      ) : null}
                     </div>
                   </div>
+                  <div className="flex gap-1 shrink-0 flex-wrap justify-end">
+                    {u.role === "Employee" ? (
+                      <Button size="sm" variant="outline" disabled={busyId === `role:${u.id}` || adminCountLive >= adminCap} onClick={() => setUserRole(u.id, "Admin")}>
+                        Promote
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled={busyId === `role:${u.id}`} onClick={() => setUserRole(u.id, "Employee")}>
+                        Demote
+                      </Button>
+                    )}
+                    {canDeleteUser(u) ? (
+                      <Button size="sm" variant="danger" disabled={busyId === `user-del:${u.id}`} onClick={() => deleteUser(u)}>
+                        <Trash2 size={11} />
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-              ))
-            ) : (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
-                No bookings yet.
               </div>
-            )}
-            {bookingsHasMore ? (
-              <div className="pt-2">
-                <Button type="button" variant="outline" disabled={busyId === "bookings-more"} onClick={loadMoreBookings} className="w-full">
-                  {busyId === "bookings-more" ? "Loading..." : "See more"}
-                </Button>
-              </div>
+            ))}
+            {filteredUsers.length === 0 ? (
+              <div className="text-center text-sm text-gray-400 py-4">No users match.</div>
+            ) : null}
+            {filteredUsers.length > usersVisible ? (
+              <Button size="sm" variant="subtle" className="w-full" onClick={() => setUsersVisible((v) => v + 5)}>See more</Button>
             ) : null}
           </div>
-        ) : null}
-      </Card>
+        </Section>
+      </div>
     </div>
   );
 }

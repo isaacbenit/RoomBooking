@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { UserCircle } from "lucide-react";
 import api from "../api/client.js";
 import { useAuth } from "../state/auth.jsx";
-import { Button, Card, Input } from "../ui/components.jsx";
+import { Alert, Button, Card, Input } from "../ui/components.jsx";
+import { getApiErrorMessage } from "../utils/apiError.js";
 
 const DOMAIN = "@testsolutions.de";
 
@@ -53,10 +55,7 @@ export default function RequestAccess() {
       // Redirect to status page with the submitted email
       navigate(`/request-status?email=${encodeURIComponent(email.toLowerCase())}`);
     } catch (e2) {
-      setError(
-        e2?.response?.data?.error ||
-          (e2?.message ? `Request failed: ${e2.message}` : "Request failed")
-      );
+      setError(getApiErrorMessage(e2, "Could not submit your request."));
     } finally {
       setLoading(false);
     }

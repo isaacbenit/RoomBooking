@@ -13,7 +13,7 @@ calendarRouter.get("/room/:roomId/week", async (req, res) => {
     return badRequest(res, "Query param 'start' must be YYYY-MM-DD");
 
   const startDate = start;
-  const endDate = addDays(startDate, 6);
+  const endDate = addDays(startDate, 4);
 
   try {
     const bookings = await getApprovedBookingsForRoomWeek({

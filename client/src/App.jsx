@@ -17,7 +17,7 @@ export default function App() {
   const showNavbar = pathname !== "/";
 
   return (
-    <div className="min-h-dvh bg-slate-50">
+    <div className="min-h-dvh" style={{ background: "#F8F9FA" }}>
       {showNavbar && <Navbar />}
       <Routes>
         <Route path="/" element={<Home />} />

@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { LogIn } from "lucide-react";
 import api from "../api/client.js";
 import { useAuth } from "../state/auth.jsx";
-import { Button, Card, Input } from "../ui/components.jsx";
+import { Button, Card, Input, Alert } from "../ui/components.jsx";
+import { getApiErrorMessage } from "../utils/apiError.js";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -26,24 +28,24 @@ export default function Login() {
       login(data);
       navigate(from, { replace: true });
     } catch (e2) {
-      setError(
-        e2?.response?.data?.error ||
-          (e2?.message ? `Login failed: ${e2.message}` : "Login failed")
-      );
+      setError(getApiErrorMessage(e2, "Login failed."));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-md px-4 py-10">
-      <Card className="p-6">
-        <div className="text-xl font-extrabold text-slate-900">Login</div>
-        <div className="mt-1 text-sm text-slate-600">
-          Use your email and password to continue.
+    <div className="mx-auto max-w-sm px-4 py-12">
+      <div className="mb-6 text-center">
+        <div className="inline-flex h-11 w-11 items-center justify-center rounded-full mb-3" style={{ background: "#D1FAE5" }}>
+          <LogIn size={20} style={{ color: "#2D6A4F" }} />
         </div>
+        <h1 className="font-semibold text-gray-900" style={{ fontSize: "1.4rem" }}>Sign in</h1>
+        <p className="mt-1 text-sm text-gray-500">Use your TestSolutions email to continue</p>
+      </div>
 
-        <form className="mt-6 grid gap-4" onSubmit={onSubmit}>
+      <Card className="p-6">
+        <form className="grid gap-4" onSubmit={onSubmit}>
           <Input
             label="Email"
             type="email"
@@ -53,9 +55,7 @@ export default function Login() {
             required
           />
           {!domainOk ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Please use your company email to continue.
-            </div>
+            <Alert variant="warning">Please use your company email to continue.</Alert>
           ) : null}
           <Input
             label="Password"
@@ -65,21 +65,15 @@ export default function Login() {
             autoComplete="current-password"
             required
           />
-
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null}
-
-          <Button disabled={loading || !domainOk} type="submit">
+          {error ? <Alert variant="error">{error}</Alert> : null}
+          <Button disabled={loading || !domainOk} type="submit" className="w-full">
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
 
-        <div className="mt-4 text-sm text-slate-600">
+        <div className="mt-4 text-center text-sm text-gray-500">
           Need access?{" "}
-          <Link className="font-semibold text-blue-700 hover:underline" to="/register">
+          <Link className="font-medium hover:underline" style={{ color: "#2D6A4F" }} to="/register">
             Request Access
           </Link>
         </div>

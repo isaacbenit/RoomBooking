@@ -1,17 +1,15 @@
 import express from "express";
 import bcrypt from "bcrypt";
-import { rateLimit } from "express-rate-limit";
 import { pool } from "../db.js";
 import { badRequest } from "../utils.js";
-
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 export const usersRouter = express.Router();
 
 const passwordChangeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => String(req.user?.id ?? req.ip),
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: { error: "Too many password change attempts. Please try again in 15 minutes." },
 });
 

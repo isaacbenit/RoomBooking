@@ -22,23 +22,18 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const url = error.config?.url || "";
 
-    // 1. Check if it's a 401
+    // 1. If it's a 401 on the password route, just pass the error to Profile.jsx
+    if (status === 401 && url.includes('users/me/password')) {
+      return Promise.reject(error);
+    }
+
+    // 2. For ANY OTHER 401, then it's a real session expiry
     if (status === 401) {
-
-      // 2. If it's the password update, STOP HERE.
-      // Do NOT call expireSession(). Do NOT redirect.
-      if (url.includes('users/me/password')) {
-        return Promise.reject(error);
-      }
-
-      // 3. For any other 401, it means the token is actually expired.
-      // This is where you call the function from your auth.jsx
-      // Assuming you have access to the expireSession function here:
-      console.warn("Real session expiry detected.");
+      // Assuming you have access to expireSession here, or just do it manually:
       localStorage.removeItem("rb_token");
       localStorage.removeItem("rb_user");
 
-      // This is likely what is currently triggering your redirect
+      // Force a reload to the login page to clear all React state safely
       window.location.href = "/login?expired=true";
     }
 

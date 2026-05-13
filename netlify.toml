@@ -1,8 +1,0 @@
-[build]
-command = "npm --workspace room-booking-client run build"
-publish = "build" # Changed from 'build' to 'dist'
-
-[[redirects]]
-from = "/*"
-to = "/index.html"
-status = 200

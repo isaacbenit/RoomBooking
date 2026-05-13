@@ -52,24 +52,38 @@ export default function Profile() {
     }
   }
 
-  async function savePassword(e) {
-    e.preventDefault();
-    setPwError("");
-    if (!currentPw) { setPwError("Current password is required."); return; }
-    if (newPw.length < 6) { setPwError("New password must be at least 6 characters."); return; }
-    if (newPw !== confirmPw) { setPwError("Passwords do not match."); return; }
-    if (newPw === currentPw) { setPwError("New password cannot be the same as your current password."); return; }
-    setPwSaving(true);
-    try {
-      await api.patch("/api/users/me/password", { currentPassword: currentPw, newPassword: newPw });
-      setCurrentPw(""); setNewPw(""); setConfirmPw("");
-      showPwSuccess("Your password has been updated successfully.");
-    } catch (err) {
-      setPwError(err?.response?.data?.error || "Failed to update password.");
-    } finally {
-      setPwSaving(false);
-    }
+async function savePassword(e) {
+  e.preventDefault();
+  setPwError("");
+
+  // Frontend Validations
+  if (!currentPw) { setPwError("Current password is required."); return; }
+  if (newPw.length < 6) { setPwError("New password must be at least 6 characters."); return; }
+  if (newPw !== confirmPw) { setPwError("Passwords do not match."); return; }
+  if (newPw === currentPw) { setPwError("New password cannot be the same as your current password."); return; }
+
+  setPwSaving(true);
+  try {
+    // Make sure the key names here match your backend (currentPassword vs currentPw)
+    await api.patch("/api/users/me/password", {
+      currentPassword: currentPw,
+      newPassword: newPw
+    });
+
+    // Success: Clear fields and show message
+    setCurrentPw("");
+    setNewPw("");
+    setConfirmPw("");
+    showPwSuccess("Your password has been updated successfully.");
+  } catch (err) {
+    // If backend sends { error: "..." }, this catches it.
+    // If it's a 401, err.response.status will be 401.
+    const errorMessage = err.response?.data?.error || err.response?.data?.message || "Failed to update password.";
+    setPwError(errorMessage);
+  } finally {
+    setPwSaving(false);
   }
+}
 
   const memberSince = user?.created_at
     ? new Date(user.created_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })

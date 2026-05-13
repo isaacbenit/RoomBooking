@@ -42,19 +42,41 @@ usersRouter.patch("/me/password", passwordChangeLimiter, async (req, res) => {
     return badRequest(res, "New password cannot be the same as your current password.");
 
   try {
+    // 1. Get the current hash
     const { rows } = await pool.query(
-      "select password_hash from users where id = $1",
+      "SELECT password_hash FROM users WHERE id = $1",
       [req.user.id]
     );
-    if (!rows.length) return res.status(404).json({ error: "User not found" });
 
-    const match = await bcrypt.compare(currentPassword, rows[0].password_hash);
-    if (!match) return res.status(401).json({ error: "Current password is incorrect." });
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
-    const newHash = await bcrypt.hash(newPassword, 12);
-    await pool.query("update users set password_hash = $1 where id = $2", [newHash, req.user.id]);
+    // 2. Compare current password
+    const isMatch = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Current password is incorrect." });
+    }
+
+    // 3. Hash new password and Update
+    const saltRounds = 12;
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    const updateResult = await pool.query(
+      "UPDATE users SET password_hash = $1 WHERE id = $2",
+      [hashedNewPassword, req.user.id]
+    );
+
+    // Check if the update actually happened
+    if (updateResult.rowCount === 0) {
+      return res.status(500).json({ error: "Password was not updated. Please try again." });
+    }
+
     return res.json({ ok: true });
-  } catch {
-    return res.status(500).json({ error: "Failed to update password" });
+
+  } catch (err) {
+    // Log the actual error to your terminal so you can see it!
+    console.error("PASSWORD_UPDATE_ERROR:", err);
+    return res.status(500).json({ error: "Server error during password update." });
   }
 });

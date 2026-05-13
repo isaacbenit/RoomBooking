@@ -22,24 +22,24 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const url = error.config?.url || "";
 
-    // Check if it's a 401 error
+    // 1. Check if it's a 401
     if (status === 401) {
 
-      // IMPROVED CHECK: Look for the specific endpoint keywords
-      // This catches "/api/users/me/password" AND "/users/me/password"
+      // 2. If it's the password update, STOP HERE.
+      // Do NOT call expireSession(). Do NOT redirect.
       if (url.includes('users/me/password')) {
-        console.log("401 on password update - allowing Profile page to handle it.");
         return Promise.reject(error);
       }
 
-      // Only redirect if it's NOT the password route
-      console.warn("Session expired, redirecting...");
-      localStorage.removeItem("token");
+      // 3. For any other 401, it means the token is actually expired.
+      // This is where you call the function from your auth.jsx
+      // Assuming you have access to the expireSession function here:
+      console.warn("Real session expiry detected.");
+      localStorage.removeItem("rb_token");
+      localStorage.removeItem("rb_user");
 
-      // Use a small check to prevent infinite redirect loops
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login?expired=true";
-      }
+      // This is likely what is currently triggering your redirect
+      window.location.href = "/login?expired=true";
     }
 
     return Promise.reject(error);

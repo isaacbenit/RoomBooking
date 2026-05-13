@@ -32,10 +32,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const expireSession = useCallback(() => {
-    localStorage.removeItem("rb_token");
-    localStorage.removeItem("rb_user");
-    setState({ token: null, user: null });
-    setSessionExpired(true);
+//     localStorage.removeItem("rb_token");
+//     localStorage.removeItem("rb_user");
+//     setState({ token: null, user: null });
+//     setSessionExpired(true);
+console.log("prevented an accidental logout")
   }, []);
 
   const updateUser = useCallback((updatedUser) => {

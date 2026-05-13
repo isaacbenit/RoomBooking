@@ -75,12 +75,17 @@ async function savePassword(e) {
     setNewPw("");
     setConfirmPw("");
     showPwSuccess("Your password has been updated successfully.");
-  } catch (err) {
-    // If backend sends { error: "..." }, this catches it.
-    // If it's a 401, err.response.status will be 401.
-    const errorMessage = err.response?.data?.error || err.response?.data?.message || "Failed to update password.";
-    setPwError(errorMessage);
+   } catch (err) {
+    // 1. Log the error data so you can see exactly what the server sent
+    console.error("Backend Error Data:", err.response?.data);
+
+    // 2. Capture the message specifically
+    const serverMessage = err.response?.data?.error;
+
+    // 3. Set the error. If serverMessage is null, show a fallback.
+    setPwError(serverMessage || "Incorrect current password or server error.");
   } finally {
+    // 4. This MUST run to stop the "Saving..." state on the button
     setPwSaving(false);
   }
 }

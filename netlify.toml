@@ -1,6 +1,6 @@
 [build]
 command = "npm --workspace room-booking-client run build"
-publish = "dist" # Changed from 'build' to 'dist'
+publish = "build" # Changed from 'build' to 'dist'
 
 [[redirects]]
 from = "/*"

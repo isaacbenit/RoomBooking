@@ -17,14 +17,23 @@ export function setExpireSessionHandler(fn) {
 }
 
 api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err?.response?.status === 401 && _expireSession) {
-      // Only expire if we actually had a token (not a fresh login failure)
-      const hadToken = Boolean(localStorage.getItem("rb_token"));
-      if (hadToken) _expireSession();
+  (response) => response,
+  (error) => {
+    // Check if it's a 401 error
+    if (error.response?.status === 401) {
+
+      // NEW: Check if the request was for the password update
+      // If it is, DON'T redirect. Let the Profile page handle the error.
+      if (error.config.url.includes('/api/users/me/password')) {
+        return Promise.reject(error);
+      }
+
+      // Existing logic: Redirect to login for everything else
+      console.warn("Session expired, redirecting...");
+      localStorage.removeItem("token");
+      window.location.href = "/login";
     }
-    return Promise.reject(err);
+    return Promise.reject(error);
   }
 );
 

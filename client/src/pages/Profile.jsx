@@ -56,7 +56,6 @@ async function savePassword(e) {
   e.preventDefault();
   setPwError("");
 
-  // Frontend Validations
   if (!currentPw) { setPwError("Current password is required."); return; }
   if (newPw.length < 6) { setPwError("New password must be at least 6 characters."); return; }
   if (newPw !== confirmPw) { setPwError("Passwords do not match."); return; }
@@ -64,28 +63,23 @@ async function savePassword(e) {
 
   setPwSaving(true);
   try {
-    // Make sure the key names here match your backend (currentPassword vs currentPw)
     await api.patch("/api/users/me/password", {
       currentPassword: currentPw,
       newPassword: newPw
     });
 
-    // Success: Clear fields and show message
     setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
     showPwSuccess("Your password has been updated successfully.");
-   } catch (err) {
-    // 1. Log the error data so you can see exactly what the server sent
-    console.error("Backend Error Data:", err.response?.data);
+  } catch (err) {
+    // LOG THIS: So you can see the exact structure in the console
+    console.error("Axios Error:", err.response);
 
-    // 2. Capture the message specifically
-    const serverMessage = err.response?.data?.error;
-
-    // 3. Set the error. If serverMessage is null, show a fallback.
-    setPwError(serverMessage || "Incorrect current password or server error.");
+    // FIX: Fallback logic to ensure SOME text is always set
+    const message = err.response?.data?.error || err.response?.data?.message || "Incorrect current password.";
+    setPwError(message);
   } finally {
-    // 4. This MUST run to stop the "Saving..." state on the button
     setPwSaving(false);
   }
 }

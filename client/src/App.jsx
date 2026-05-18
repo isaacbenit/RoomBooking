@@ -9,7 +9,7 @@ import RequestStatus from "./pages/RequestStatus.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import RoomCalendar from "./pages/RoomCalendar.jsx";
 import MyRequests from "./pages/MyRequests.jsx";
-import AdminDashboard from "./pages/AdminDashboard.jsx";
+import AdminDashboard from "./pages/AdminDashboard.jsx"; // Keep this one!
 import Profile from "./pages/Profile.jsx";
 
 export default function App() {

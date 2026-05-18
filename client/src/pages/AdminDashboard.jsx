@@ -7,7 +7,7 @@ import { Alert, Badge, Button, Card, Input, SectionTitle } from "../ui/component
 function statusTone(status) {
   if (status === "confirmed") return "green";
   if (status === "rejected" || status === "cancelled") return "red";
-  return "amber";
+  return "amber"; // "pending" falls here
 }
 
 function regTone(status) {
@@ -109,6 +109,20 @@ export default function AdminDashboard() {
       setBookingsHasMore(Boolean(r.data.hasMore));
     } catch (e) {
       setError(e?.response?.data?.error || "Failed to load more");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // NEW FEATURE: Admin can change room booking statuses directly
+  async function updateBookingStatus(id, newStatus) {
+    setBusyId(`status:${id}`);
+    setError("");
+    try {
+      await api.patch(`/api/bookings/${id}/status`, { status: newStatus });
+      await refresh();
+    } catch (e) {
+      setError(e?.response?.data?.error || "Failed to update booking status");
     } finally {
       setBusyId(null);
     }
@@ -277,7 +291,7 @@ export default function AdminDashboard() {
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         {/* All Bookings */}
-        <Section sectionKey="bookings" icon={ClipboardList} title="All Bookings" subtitle="Cancel or delete any booking.">
+        <Section sectionKey="bookings" icon={ClipboardList} title="All Bookings" subtitle="Approve, reject, or delete reservations.">
           <div className="grid gap-2 max-h-[480px] overflow-y-auto pr-1">
             {bookings.length ? bookings.map((b) => (
               <div key={b.id} className="rounded-lg border border-gray-200 bg-white p-3">
@@ -291,10 +305,25 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <Badge tone={statusTone(b.status)}>{b.status}</Badge>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="outline" disabled={!!busyId} onClick={() => cancelBooking(b.id)}>
-                        <XCircle size={11} /> Cancel
-                      </Button>
+                    <div className="flex gap-1 mt-1">
+                      {/* Interactive Controls for Pending Bookings */}
+                      {b.status === "pending" ? (
+                        <>
+                          <Button size="sm" className="bg-[#2D6A4F] hover:bg-[#1B4332] text-white" disabled={!!busyId} onClick={() => updateBookingStatus(b.id, "confirmed")}>
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-red-600 border-red-200" disabled={!!busyId} onClick={() => updateBookingStatus(b.id, "rejected")}>
+                            Reject
+                          </Button>
+                        </>
+                      ) : (
+                        /* Standard Controls for Confirmed/Processed Bookings */
+                        b.status === "confirmed" && (
+                          <Button size="sm" variant="outline" disabled={!!busyId} onClick={() => cancelBooking(b.id)}>
+                            <XCircle size={11} /> Cancel
+                          </Button>
+                        )
+                      )}
                       <Button size="sm" variant="danger" disabled={!!busyId} onClick={() => deleteBooking(b.id)}>
                         <Trash2 size={11} />
                       </Button>
